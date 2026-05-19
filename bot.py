@@ -1,16 +1,30 @@
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
-# ✅ 여기에 본인 키 입력
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "여기에_API_키_입력")
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "여기에_봇_토큰_입력")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "여기에_채팅ID_입력")
+# ✅ 환경변수에서 키 불러오기
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 
 def get_economic_news():
-    """Claude API로 세계 경제 이슈 Top 10 생성"""
-    today = datetime.now().strftime("%Y년 %m월 %d일")
+    """요일에 따라 다른 프롬프트로 Claude API 호출"""
+    today = datetime.now()
+    weekday = today.weekday()  # 0=월, 1=화, 2=수, 3=목, 4=금, 5=토, 6=일
+    today_str = today.strftime("%Y년 %m월 %d일")
+
+    # 월요일: 주말(토~일) 이슈
+    if weekday == 0:
+        saturday = (today - timedelta(days=2)).strftime("%m월 %d일")
+        sunday = (today - timedelta(days=1)).strftime("%m월 %d일")
+        period = f"{saturday}~{sunday} 주말"
+        period_desc = f"{saturday}부터 {sunday} 주말 동안"
+    # 화~금요일: 전날 이슈
+    else:
+        yesterday = (today - timedelta(days=1)).strftime("%m월 %d일")
+        period = f"{yesterday}"
+        period_desc = f"{yesterday} 하루 동안"
 
     headers = {
         "Content-Type": "application/json",
@@ -25,11 +39,11 @@ def get_economic_news():
         "messages": [
             {
                 "role": "user",
-                "content": f"""오늘({today}) 기준 최신 세계 경제 이슈 Top 10을 웹 검색해서 아래 형식으로 정리해줘.
+                "content": f"""오늘은 {today_str}이야. {period_desc} 발생한 세계 경제 이슈 Top 10을 웹 검색해서 아래 형식으로 정리해줘.
 
 형식:
-📊 *이번 주 세계 경제 이슈 Top 10*
-_{today} 기준_
+📊 *{period} 세계 경제 이슈 Top 10*
+_{today_str} 아침 브리핑_
 
 1️⃣ *[제목]*
 → [2-3줄 핵심 요약]
@@ -40,7 +54,7 @@ _{today} 기준_
 (... 10개까지)
 
 💡 *한 줄 총평*
-[이번 주 경제 흐름 한 줄 정리]
+[전체 경제 흐름 한 줄 정리]
 
 텔레그램 Markdown 형식으로 작성해줘.""",
             }
@@ -53,7 +67,6 @@ _{today} 기준_
     response.raise_for_status()
 
     data = response.json()
-    # content 블록 중 text만 추출
     result = ""
     for block in data.get("content", []):
         if block.get("type") == "text":
@@ -76,7 +89,15 @@ def send_telegram_message(text):
 
 
 def main():
-    print(f"🚀 경제 뉴스 봇 실행 중... ({datetime.now()})")
+    today = datetime.now()
+    weekday = today.weekday()
+
+    # 토요일(5), 일요일(6)은 실행 안 함
+    if weekday >= 5:
+        print("⏭️ 주말이라 건너뜁니다.")
+        return
+
+    print(f"🚀 경제 뉴스 봇 실행 중... ({today})")
     news = get_economic_news()
     send_telegram_message(news)
 
