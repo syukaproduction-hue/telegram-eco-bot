@@ -1,0 +1,29 @@
+name: 매주 월요일 경제 뉴스 봇
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # 매주 월요일 UTC 00:00 = 한국시간 09:00
+  workflow_dispatch:      # 수동 실행 버튼 (테스트용)
+
+jobs:
+  send-news:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v3
+
+      - name: Python 설치
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 패키지 설치
+        run: pip install requests
+
+      - name: 봇 실행
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot.py
