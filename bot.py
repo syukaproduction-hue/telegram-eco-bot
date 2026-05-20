@@ -2,30 +2,93 @@ import os
 import requests
 from datetime import datetime, timedelta
 
-# ✅ 환경변수에서 키 불러오기
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
+
+
+def fetch_news(from_date, to_date):
+    """NewsAPI에서 한국 + 세계 경제 뉴스 가져오기"""
+    all_articles = []
+
+    # 1. 세계 경제 뉴스 (영어)
+    global_url = "https://newsapi.org/v2/everything"
+    global_params = {
+        "q": "economy OR stock market OR interest rate OR trade OR inflation OR GDP",
+        "language": "en",
+        "from": from_date,
+        "to": to_date,
+        "sortBy": "popularity",
+        "pageSize": 20,
+        "apiKey": NEWS_API_KEY,
+    }
+    global_res = requests.get(global_url, params=global_params)
+    if global_res.status_code == 200:
+        articles = global_res.json().get("articles", [])
+        for a in articles:
+            all_articles.append({
+                "title": a.get("title", ""),
+                "description": a.get("description", ""),
+                "source": a.get("source", {}).get("name", ""),
+                "type": "글로벌"
+            })
+
+    # 2. 한국 경제 뉴스
+    korea_url = "https://newsapi.org/v2/everything"
+    korea_params = {
+        "q": "한국 경제 OR 주식 OR 환율 OR 금리 OR 무역 OR 코스피",
+        "language": "ko",
+        "from": from_date,
+        "to": to_date,
+        "sortBy": "popularity",
+        "pageSize": 20,
+        "apiKey": NEWS_API_KEY,
+    }
+    korea_res = requests.get(korea_url, params=korea_params)
+    if korea_res.status_code == 200:
+        articles = korea_res.json().get("articles", [])
+        for a in articles:
+            all_articles.append({
+                "title": a.get("title", ""),
+                "description": a.get("description", ""),
+                "source": a.get("source", {}).get("name", ""),
+                "type": "한국"
+            })
+
+    return all_articles
 
 
 def get_economic_news():
-    """요일에 따라 다른 프롬프트로 Claude API 호출"""
     today = datetime.now()
-    weekday = today.weekday()  # 0=월, 1=화, 2=수, 3=목, 4=금, 5=토, 6=일
+    weekday = today.weekday()
     today_str = today.strftime("%Y년 %m월 %d일")
 
-    # 월요일: 주말(토~일) 이슈
-    if weekday == 0:
+    # 날짜 범위 설정
+    if weekday == 0:  # 월요일: 주말 뉴스
+        from_date = (today - timedelta(days=2)).strftime("%Y-%m-%d")
+        to_date = (today - timedelta(days=1)).strftime("%Y-%m-%d")
         saturday = (today - timedelta(days=2)).strftime("%m월 %d일")
         sunday = (today - timedelta(days=1)).strftime("%m월 %d일")
         period = f"{saturday}~{sunday} 주말"
-        period_desc = f"{saturday}부터 {sunday} 주말 동안"
-    # 화~금요일: 전날 이슈
-    else:
+    else:  # 화~금: 전날 뉴스
+        from_date = (today - timedelta(days=1)).strftime("%Y-%m-%d")
+        to_date = today.strftime("%Y-%m-%d")
         yesterday = (today - timedelta(days=1)).strftime("%m월 %d일")
-        period = f"{yesterday}"
-        period_desc = f"{yesterday} 하루 동안"
+        period = yesterday
 
+    # 뉴스 가져오기
+    articles = fetch_news(from_date, to_date)
+
+    # 뉴스 목록 텍스트로 변환
+    news_text = ""
+    for i, a in enumerate(articles[:40]):
+        news_text += f"[{a['type']}] {a['source']}: {a['title']}\n{a['description']}\n\n"
+
+    if not news_text:
+        news_text = "뉴스를 가져오지 못했습니다. Claude 자체 지식으로 정리합니다."
+
+    # Claude API로 정리
     headers = {
         "Content-Type": "application/json",
         "x-api-key": ANTHROPIC_API_KEY,
@@ -35,23 +98,28 @@ def get_economic_news():
     payload = {
         "model": "claude-sonnet-4-20250514",
         "max_tokens": 2000,
-        "tools": [{"type": "web_search_20250305", "name": "web_search"}],
         "messages": [
             {
                 "role": "user",
-                "content": f"""오늘은 {today_str}이야. {period_desc} 발생한 세계 경제 이슈 Top 10을 웹 검색해서 아래 형식으로 정리해줘.
+                "content": f"""오늘은 {today_str}이야. 아래는 {period} 동안의 한국 및 세계 경제 뉴스야.
+이 뉴스들을 바탕으로 가장 중요한 이슈 Top 10을 아래 형식으로 정리해줘.
+한국 뉴스와 글로벌 뉴스를 적절히 섞어서 선정하고, 모두 한국어로 작성해줘.
+
+--- 뉴스 원문 ---
+{news_text}
+-----------------
 
 형식:
-📊 *{period} 세계 경제 이슈 Top 10*
+📊 *{period} 경제 이슈 Top 10*
 _{today_str} 아침 브리핑_
 
-1️⃣ *[제목]*
+1️⃣ *[제목]* [🇰🇷 또는 🌍]
 → [2-3줄 핵심 요약]
 
-2️⃣ *[제목]*
+2️⃣ *[제목]* [🇰🇷 또는 🌍]
 → [2-3줄 핵심 요약]
 
-(... 10개까지)
+(... 10개까지, 🇰🇷=한국, 🌍=글로벌)
 
 💡 *한 줄 총평*
 [전체 경제 흐름 한 줄 정리]
@@ -75,7 +143,6 @@ _{today_str} 아침 브리핑_
 
 
 def send_telegram_message(text):
-    """텔레그램으로 메시지 전송"""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -92,7 +159,6 @@ def main():
     today = datetime.now()
     weekday = today.weekday()
 
-    # 토요일(5), 일요일(6)은 실행 안 함
     if weekday >= 5:
         print("⏭️ 주말이라 건너뜁니다.")
         return
