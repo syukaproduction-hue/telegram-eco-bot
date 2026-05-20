@@ -9,13 +9,11 @@ NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
 
 
 def fetch_news(from_date, to_date):
-    """NewsAPI에서 한국 + 세계 경제 뉴스 가져오기"""
     all_articles = []
 
-    # 1. 세계 경제 뉴스 (영어)
     global_url = "https://newsapi.org/v2/everything"
     global_params = {
-        "q": "economy OR stock market OR interest rate OR trade OR inflation OR GDP",
+        "q": "economy OR stock market OR interest rate OR trade OR inflation",
         "language": "en",
         "from": from_date,
         "to": to_date,
@@ -25,8 +23,7 @@ def fetch_news(from_date, to_date):
     }
     global_res = requests.get(global_url, params=global_params)
     if global_res.status_code == 200:
-        articles = global_res.json().get("articles", [])
-        for a in articles:
+        for a in global_res.json().get("articles", []):
             all_articles.append({
                 "title": a.get("title", ""),
                 "description": a.get("description", ""),
@@ -34,10 +31,8 @@ def fetch_news(from_date, to_date):
                 "type": "글로벌"
             })
 
-    # 2. 한국 경제 뉴스
-    korea_url = "https://newsapi.org/v2/everything"
     korea_params = {
-        "q": "한국 경제 OR 주식 OR 환율 OR 금리 OR 무역 OR 코스피",
+        "q": "한국 경제 OR 주식 OR 환율 OR 금리 OR 코스피",
         "language": "ko",
         "from": from_date,
         "to": to_date,
@@ -45,10 +40,9 @@ def fetch_news(from_date, to_date):
         "pageSize": 20,
         "apiKey": NEWS_API_KEY,
     }
-    korea_res = requests.get(korea_url, params=korea_params)
+    korea_res = requests.get(global_url, params=korea_params)
     if korea_res.status_code == 200:
-        articles = korea_res.json().get("articles", [])
-        for a in articles:
+        for a in korea_res.json().get("articles", []):
             all_articles.append({
                 "title": a.get("title", ""),
                 "description": a.get("description", ""),
@@ -64,31 +58,27 @@ def get_economic_news():
     weekday = today.weekday()
     today_str = today.strftime("%Y년 %m월 %d일")
 
-    # 날짜 범위 설정
-    if weekday == 0:  # 월요일: 주말 뉴스
+    if weekday == 0:
         from_date = (today - timedelta(days=2)).strftime("%Y-%m-%d")
         to_date = (today - timedelta(days=1)).strftime("%Y-%m-%d")
         saturday = (today - timedelta(days=2)).strftime("%m월 %d일")
         sunday = (today - timedelta(days=1)).strftime("%m월 %d일")
         period = f"{saturday}~{sunday} 주말"
-    else:  # 화~금: 전날 뉴스
+    else:
         from_date = (today - timedelta(days=1)).strftime("%Y-%m-%d")
         to_date = today.strftime("%Y-%m-%d")
         yesterday = (today - timedelta(days=1)).strftime("%m월 %d일")
         period = yesterday
 
-    # 뉴스 가져오기
     articles = fetch_news(from_date, to_date)
 
-    # 뉴스 목록 텍스트로 변환
     news_text = ""
-    for i, a in enumerate(articles[:40]):
+    for a in articles[:40]:
         news_text += f"[{a['type']}] {a['source']}: {a['title']}\n{a['description']}\n\n"
 
     if not news_text:
-        news_text = "뉴스를 가져오지 못했습니다. Claude 자체 지식으로 정리합니다."
+        news_text = "뉴스를 가져오지 못했습니다. 최근 경제 트렌드 기반으로 정리합니다."
 
-    # Claude API로 정리
     headers = {
         "Content-Type": "application/json",
         "x-api-key": ANTHROPIC_API_KEY,
@@ -96,7 +86,7 @@ def get_economic_news():
     }
 
     payload = {
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-5",
         "max_tokens": 2000,
         "messages": [
             {
