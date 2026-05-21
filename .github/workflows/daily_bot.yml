@@ -2,8 +2,11 @@ name: 매일 아침 경제 뉴스 봇
 
 on:
   schedule:
-    - cron: '0 0 * * 1-5'  # 월~금 UTC 00:00 = 한국시간 09:00
+    - cron: '0 9 * * 1-5'  # 월~금 UTC 09:00 = 한국시간 18:00 (임시 테스트)
   workflow_dispatch:         # 수동 실행 버튼 (테스트용)
+  push:
+    branches:
+      - main                 # 코드 push 시에도 실행 (저장소 활성화 유지)
 
 jobs:
   send-news:
@@ -11,10 +14,10 @@ jobs:
 
     steps:
       - name: 코드 체크아웃
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Python 설치
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -26,4 +29,5 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
         run: python bot.py
