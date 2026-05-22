@@ -32,7 +32,7 @@ def fetch_news(from_date, to_date):
             })
 
     korea_params = {
-        "q": "한국 경제 OR 주식 OR 환율 OR 금리 OR 코스피",
+        "q": "금리 또는 주식 OR경제 OR 무역 OR 인플레이션",
         "language": "ko",
         "from": from_date,
         "to": to_date,
@@ -47,7 +47,7 @@ def fetch_news(from_date, to_date):
                 "title": a.get("title", ""),
                 "description": a.get("description", ""),
                 "source": a.get("source", {}).get("name", ""),
-                "type": "한국"
+                "type": "금리"
             })
 
     return all_articles
@@ -77,7 +77,7 @@ def get_economic_news():
         news_text += f"[{a['type']}] {a['source']}: {a['title']}\n{a['description']}\n\n"
 
     if not news_text:
-        news_text = "뉴스를 가져오지 못했습니다. 최근 경제 트렌드 기반으로 정리합니다."
+        news_text = "죄송합니다 경제 뉴스를 찾을 수 없습니다. 금리, 주식, 무역 관련 뉴스가 없거나 오류가 발생했습니다."
 
     headers = {
         "Content-Type": "application/json",
@@ -91,30 +91,33 @@ def get_economic_news():
         "messages": [
             {
                 "role": "user",
-                "content": f"""오늘은 {today_str}이야. 아래는 {period} 동안의 한국 및 세계 경제 뉴스야.
-이 뉴스들을 바탕으로 가장 중요한 이슈 Top 10을 아래 형식으로 정리해줘.
-한국 뉴스와 글로벌 뉴스를 적절히 섞어서 선정하고, 모두 한국어로 작성해줘.
+                "content": f"""오늘 {today_str}입니다. {period} 경제 뉴스를 정리하고 분석해주세요. 금리, 주식, 무역 관련 뉴스를 중심으로 분석하세요.
 
---- 뉴스 원문 ---
+--경제뉴스 분석--
 {news_text}
------------------
+-------------------
 
-형식:
-📊 *{period} 경제 이슈 Top 10*
-_{today_str} 아침 브리핑_
+🌍 {period} 주요 경제 뉴스
+{today_str} 기준
 
-1️⃣ *[제목]* [🇰🇷 또는 🌍]
-→ [2-3줄 핵심 요약]
+(1 [글로벌] [주요 이슈] [뉴스 제목] [요약]
+   [2-3줄 핵심 분석]
 
-2️⃣ *[제목]* [🇰🇷 또는 🌍]
-→ [2-3줄 핵심 요약]
+(2 [글로벌] [주요 이슈] [뉴스 제목] [요약]
+   [2-3줄 핵심 분석]
 
-(... 10개까지, 🇰🇷=한국, 🌍=글로벌)
+(...10개 주요 이슈, 순서는 중요도 기준)
 
-💡 *한 줄 총평*
-[전체 경제 흐름 한 줄 정리]
+💡 국내 경제 뉴스 주요 키워드
+[금리 관련] [주식 관련] [무역 관련]
 
-텔레그램 Markdown 형식으로 작성해줘.""",
+💼 시장 분석
+[금리 이슈 분석] [주식 동향] [무역 전망]
+
+💻 해석 및 분석
+[2-3줄 요약]
+
+일반 텍스트 형식으로 작성하세요. 별표(*), 언더스코어(_), 대괄호([]), 백틱(`) 등 마크다운 특수문자를 사용하지 마세요.""",
             }
         ],
     }
@@ -137,11 +140,10 @@ def send_telegram_message(text):
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": text,
-        "parse_mode": "Markdown",
     }
     response = requests.post(url, json=payload)
     response.raise_for_status()
-    print("✅ 텔레그램 전송 완료!")
+    print("✨ 텔레그램 메시지 전송 완료!")
     return response.json()
 
 
@@ -150,10 +152,10 @@ def main():
     weekday = today.weekday()
 
     if weekday >= 5:
-        print("⏭️ 주말이라 건너뜁니다.")
+        print("⏸️ 주말이라 뉴스를 전송하지 않습니다.")
         return
 
-    print(f"🚀 경제 뉴스 봇 실행 중... ({today})")
+    print(f"🌏 경제 뉴스 수집 중입니다 ({today})")
     news = get_economic_news()
     send_telegram_message(news)
 
