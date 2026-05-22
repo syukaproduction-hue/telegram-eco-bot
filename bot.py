@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from datetime import datetime, timedelta
 
@@ -55,6 +56,31 @@ def fetch_news(from_date, to_date):
     return all_articles
 
 
+def enforce_length(text, max_len=3600):
+    """총평을 보존하면서 전체 길이를 max_len 이하로 강제 조정"""
+    if len(text) <= max_len:
+        return text
+
+    # 총평 섹션 분리
+    totalp_text = ""
+    for marker in ["💡 한 줄 총평", "💡 한줄 총평", "💡"]:
+        pos = text.rfind(marker)
+        if pos > 0:
+            totalp_text = "\n\n" + text[pos:]
+            text = text[:pos].rstrip()
+            break
+
+    # 총평을 제외한 본문이 들어갈 수 있는 크기 계산
+    available = max_len - len(totalp_text)
+    if len(text) > available:
+        # 마지막 완전한 항목 경계(빈 줄)에서 잘라냄
+        cut = text[:available]
+        boundary = cut.rfind("\n\n")
+        text = cut[:boundary] if boundary > 0 else cut
+
+    return text.strip() + totalp_text
+
+
 def get_economic_news():
     today = datetime.now()
     weekday = today.weekday()
@@ -89,31 +115,32 @@ def get_economic_news():
 
     payload = {
         "model": "claude-sonnet-4-6",
-        "max_tokens": 1200,
+        "max_tokens": 700,
         "messages": [
             {
                 "role": "user",
                 "content": f"""오늘 {today_str}입니다. {period} 경제 뉴스 Top 10을 정리해주세요.
 
 반드시 지킬 규칙:
-- 전체 응답은 2000자 이내
+- 전체 응답은 1500자 이내
+- 각 항목의 → 요약은 반드시 1문장, 50자 이내
 - 별표(*), 언더스코어(_), 백틱(`), 샵(#) 등 마크다운 특수문자 사용 금지
 - 이모지 사용 가능
 - 일반 텍스트로만 작성
 
-출력 형식 (반드시 이 형식 그대로):
+출력 형식 (이 형식을 그대로 따를 것):
 📅 {today_str} 경제 뉴스 Top 10
 
 1️⃣ 뉴스 제목 🌍
-→ 핵심 내용을 1~2문장으로 요약. 마침표로 구분.
+→ 핵심 내용 1문장(50자 이내).
 
 2️⃣ 뉴스 제목 🇰🇷
-→ 핵심 내용을 1~2문장으로 요약. 마침표로 구분.
+→ 핵심 내용 1문장(50자 이내).
 
-(글로벌 뉴스는 🌍, 한국 뉴스는 🇰🇷 사용. 총 10개, 중요도 순)
+(총 10개, 중요도 순. 글로벌 뉴스는 🌍, 한국 뉴스는 🇰🇷)
 
 💡 한 줄 총평
-전체 경제 흐름을 1~2문장으로 요약.
+전체 흐름 1문장.
 
 ---경제뉴스 원문---
 {news_text}
@@ -137,11 +164,14 @@ def get_economic_news():
     while "\n\n\n" in result:
         result = result.replace("\n\n\n", "\n\n")
 
-    return result.strip()
+    # 길이 초과 시 코드 레벨에서 강제 조정 (총평 보존)
+    result = enforce_length(result.strip(), max_len=3600)
+
+    return result
 
 
 def send_telegram_message(text):
-    """4000자 단위로 분할 전송 (Telegram 4096자 제한 대응)"""
+    """4000자 단위로 분할 전송"""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
     chunks = []
@@ -156,14 +186,11 @@ def send_telegram_message(text):
 
     for i, chunk in enumerate(chunks, 1):
         payload = {"chat_id": TELEGRAM_CHAT_ID, "text": chunk}
-        try:
-            response = requests.post(url, json=payload)
-            response.raise_for_status()
-            if len(chunks) > 1:
-                print(f"✅ 메시지 {i}/{len(chunks)} 전송 완료")
-        except Exception as e:
-            print(f"⚠️ 메시지 {i}/{len(chunks)} 전송 실패: {e}")
-            raise
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        if len(chunks) > 1:
+            print(f"✅ 메시지 {i}/{len(chunks)} 전송 완료")
+            time.sleep(1)  # 텔레그램 Rate limit 방지
 
     print("✨ 텔레그램 메시지 전송 완료!")
 
