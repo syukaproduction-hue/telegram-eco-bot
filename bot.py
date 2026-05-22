@@ -7,7 +7,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
 
-TELEGRAM_MAX_LEN = 4000  # Telegram 상한 4096에서 여유 96자 확보
+TELEGRAM_MAX_LEN = 4000
 
 
 def fetch_news(from_date, to_date):
@@ -76,7 +76,7 @@ def get_economic_news():
 
     news_text = ""
     for a in articles[:40]:
-        news_text += f"[{a['type']}] {a['source']}: {a['title']}\n{a['description']}\n\n"
+        news_text += f"[{a['type']}] {a['title']}\n{a['description']}\n\n"
 
     if not news_text:
         news_text = "경제 뉴스를 찾을 수 없습니다."
@@ -96,21 +96,19 @@ def get_economic_news():
                 "content": f"""오늘 {today_str}입니다. {period} 경제 뉴스를 정리해주세요.
 
 아래 규칙을 반드시 따르세요.
-- 전체 응답이 3500자를 넘지 않도록 하세요.
+- 전체 응답이 3000자를 넘지 않도록 하세요.
+- 출처(출처:)를 포함하지 마세요.
 - 별표(*), 언더스코어(_), 백틱(`), 대괄호([]), 샵(#) 등 마크다운 특수문자를 절대 사용하지 마세요.
 - 이모지는 사용해도 됩니다.
 - 일반 텍스트로만 작성하세요.
 
-출력 형식:
-📅 {period} 경제 뉴스 Top 10
-{today_str} 아침 브리핑
+출력 형식 (이 형식을 그대로 따르세요):
+📅 {today_str} 경제 뉴스 Top 10
 
-1. [제목]
-   출처: [소스]
+1. 뉴스 제목
    요약: 2~3줄 핵심 내용
 
-2. [제목]
-   출처: [소스]
+2. 뉴스 제목
    요약: 2~3줄 핵심 내용
 
 (총 10개, 중요도 순)
@@ -135,17 +133,25 @@ def get_economic_news():
     for block in data.get("content", []):
         if block.get("type") == "text":
             result += block.get("text", "")
-    return result
+
+    # 출처 줄 제거 (Claude가 지시를 어길 경우 대비)
+    lines = result.split("\n")
+    cleaned = [l for l in lines if not l.strip().startswith("출처:")]
+    result = "\n".join(cleaned)
+
+    # 연속 빈 줄 정리
+    while "\n\n\n" in result:
+        result = result.replace("\n\n\n", "\n\n")
+
+    return result.strip()
 
 
 def send_telegram_message(text):
     """4000자 단위로 분할 전송 (Telegram 4096자 제한 대응)"""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
-    # 4000자 단위로 분할
     chunks = []
     while len(text) > TELEGRAM_MAX_LEN:
-        # 마지막 줄바꿈 위치에서 자르기 (단어 중간에 자르지 않도록)
         split_pos = text.rfind("\n", 0, TELEGRAM_MAX_LEN)
         if split_pos == -1:
             split_pos = TELEGRAM_MAX_LEN
@@ -155,14 +161,15 @@ def send_telegram_message(text):
         chunks.append(text)
 
     for i, chunk in enumerate(chunks, 1):
-        payload = {
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": chunk,
-        }
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        if len(chunks) > 1:
-            print(f"✅ 메시지 {i}/{len(chunks)} 전송 완료")
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": chunk}
+        try:
+            response = requests.post(url, json=payload)
+            response.raise_for_status()
+            if len(chunks) > 1:
+                print(f"✅ 메시지 {i}/{len(chunks)} 전송 완료")
+        except Exception as e:
+            print(f"⚠️ 메시지 {i}/{len(chunks)} 전송 실패: {e}")
+            raise
 
     print("✨ 텔레그램 메시지 전송 완료!")
 
