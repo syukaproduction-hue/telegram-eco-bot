@@ -7,6 +7,8 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
 
+TELEGRAM_MAX_LEN = 4000  # Telegram 상한 4096에서 여유 96자 확보
+
 
 def fetch_news(from_date, to_date):
     all_articles = []
@@ -32,7 +34,7 @@ def fetch_news(from_date, to_date):
             })
 
     korea_params = {
-        "q": "금리 또는 주식 OR경제 OR 무역 OR 인플레이션",
+        "q": "금리 OR 주식 OR 경제 OR 무역 OR 인플레이션",
         "language": "ko",
         "from": from_date,
         "to": to_date,
@@ -47,7 +49,7 @@ def fetch_news(from_date, to_date):
                 "title": a.get("title", ""),
                 "description": a.get("description", ""),
                 "source": a.get("source", {}).get("name", ""),
-                "type": "금리"
+                "type": "한국"
             })
 
     return all_articles
@@ -77,7 +79,7 @@ def get_economic_news():
         news_text += f"[{a['type']}] {a['source']}: {a['title']}\n{a['description']}\n\n"
 
     if not news_text:
-        news_text = "죄송합니다 경제 뉴스를 찾을 수 없습니다. 금리, 주식, 무역 관련 뉴스가 없거나 오류가 발생했습니다."
+        news_text = "경제 뉴스를 찾을 수 없습니다."
 
     headers = {
         "Content-Type": "application/json",
@@ -86,38 +88,39 @@ def get_economic_news():
     }
 
     payload = {
-        "model": "claude-sonnet-4-5",
-        "max_tokens": 2000,
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 1500,
         "messages": [
             {
                 "role": "user",
-                "content": f"""오늘 {today_str}입니다. {period} 경제 뉴스를 정리하고 분석해주세요. 금리, 주식, 무역 관련 뉴스를 중심으로 분석하세요.
+                "content": f"""오늘 {today_str}입니다. {period} 경제 뉴스를 정리해주세요.
 
---경제뉴스 분석--
+아래 규칙을 반드시 따르세요.
+- 전체 응답이 3500자를 넘지 않도록 하세요.
+- 별표(*), 언더스코어(_), 백틱(`), 대괄호([]), 샵(#) 등 마크다운 특수문자를 절대 사용하지 마세요.
+- 이모지는 사용해도 됩니다.
+- 일반 텍스트로만 작성하세요.
+
+출력 형식:
+📅 {period} 경제 뉴스 Top 10
+{today_str} 아침 브리핑
+
+1. [제목]
+   출처: [소스]
+   요약: 2~3줄 핵심 내용
+
+2. [제목]
+   출처: [소스]
+   요약: 2~3줄 핵심 내용
+
+(총 10개, 중요도 순)
+
+💡 한줄 총평
+전체 경제 흐름 2~3줄 요약
+
+---경제뉴스 원문---
 {news_text}
--------------------
-
-🌍 {period} 주요 경제 뉴스
-{today_str} 기준
-
-(1 [글로벌] [주요 이슈] [뉴스 제목] [요약]
-   [2-3줄 핵심 분석]
-
-(2 [글로벌] [주요 이슈] [뉴스 제목] [요약]
-   [2-3줄 핵심 분석]
-
-(...10개 주요 이슈, 순서는 중요도 기준)
-
-💡 국내 경제 뉴스 주요 키워드
-[금리 관련] [주식 관련] [무역 관련]
-
-💼 시장 분석
-[금리 이슈 분석] [주식 동향] [무역 전망]
-
-💻 해석 및 분석
-[2-3줄 요약]
-
-일반 텍스트 형식으로 작성하세요. 별표(*), 언더스코어(_), 대괄호([]), 백틱(`) 등 마크다운 특수문자를 사용하지 마세요.""",
+-------------------""",
             }
         ],
     }
@@ -136,15 +139,32 @@ def get_economic_news():
 
 
 def send_telegram_message(text):
+    """4000자 단위로 분할 전송 (Telegram 4096자 제한 대응)"""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-    }
-    response = requests.post(url, json=payload)
-    response.raise_for_status()
+
+    # 4000자 단위로 분할
+    chunks = []
+    while len(text) > TELEGRAM_MAX_LEN:
+        # 마지막 줄바꿈 위치에서 자르기 (단어 중간에 자르지 않도록)
+        split_pos = text.rfind("\n", 0, TELEGRAM_MAX_LEN)
+        if split_pos == -1:
+            split_pos = TELEGRAM_MAX_LEN
+        chunks.append(text[:split_pos])
+        text = text[split_pos:].lstrip("\n")
+    if text:
+        chunks.append(text)
+
+    for i, chunk in enumerate(chunks, 1):
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": chunk,
+        }
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        if len(chunks) > 1:
+            print(f"✅ 메시지 {i}/{len(chunks)} 전송 완료")
+
     print("✨ 텔레그램 메시지 전송 완료!")
-    return response.json()
 
 
 def main():
