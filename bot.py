@@ -61,7 +61,6 @@ def enforce_length(text, max_len=3600):
     if len(text) <= max_len:
         return text
 
-    # 총평 섹션 분리
     totalp_text = ""
     for marker in ["💡 한 줄 총평", "💡 한줄 총평", "💡"]:
         pos = text.rfind(marker)
@@ -70,10 +69,8 @@ def enforce_length(text, max_len=3600):
             text = text[:pos].rstrip()
             break
 
-    # 총평을 제외한 본문이 들어갈 수 있는 크기 계산
     available = max_len - len(totalp_text)
     if len(text) > available:
-        # 마지막 완전한 항목 경계(빈 줄)에서 잘라냄
         cut = text[:available]
         boundary = cut.rfind("\n\n")
         text = cut[:boundary] if boundary > 0 else cut
@@ -115,15 +112,13 @@ def get_economic_news():
 
     payload = {
         "model": "claude-sonnet-4-6",
-        "max_tokens": 700,
+        "max_tokens": 2000,
         "messages": [
             {
                 "role": "user",
                 "content": f"""오늘 {today_str}입니다. {period} 경제 뉴스 Top 10을 정리해주세요.
 
 반드시 지킬 규칙:
-- 전체 응답은 1500자 이내
-- 각 항목의 → 요약은 반드시 1문장, 50자 이내
 - 별표(*), 언더스코어(_), 백틱(`), 샵(#) 등 마크다운 특수문자 사용 금지
 - 이모지 사용 가능
 - 일반 텍스트로만 작성
@@ -132,15 +127,15 @@ def get_economic_news():
 📅 {today_str} 경제 뉴스 Top 10
 
 1️⃣ 뉴스 제목 🌍
-→ 핵심 내용 1문장(50자 이내).
+→ 핵심 내용을 짧은 문장들로. 마침표로 구분. 이렇게 작성.
 
 2️⃣ 뉴스 제목 🇰🇷
-→ 핵심 내용 1문장(50자 이내).
+→ 핵심 내용을 짧은 문장들로. 마침표로 구분. 이렇게 작성.
 
 (총 10개, 중요도 순. 글로벌 뉴스는 🌍, 한국 뉴스는 🇰🇷)
 
 💡 한 줄 총평
-전체 흐름 1문장.
+전체 경제 흐름 1~2문장 요약.
 
 ---경제뉴스 원문---
 {news_text}
@@ -160,11 +155,9 @@ def get_economic_news():
         if block.get("type") == "text":
             result += block.get("text", "")
 
-    # 연속 빈 줄 정리
     while "\n\n\n" in result:
         result = result.replace("\n\n\n", "\n\n")
 
-    # 길이 초과 시 코드 레벨에서 강제 조정 (총평 보존)
     result = enforce_length(result.strip(), max_len=3600)
 
     return result
@@ -190,7 +183,7 @@ def send_telegram_message(text):
         response.raise_for_status()
         if len(chunks) > 1:
             print(f"✅ 메시지 {i}/{len(chunks)} 전송 완료")
-            time.sleep(1)  # 텔레그램 Rate limit 방지
+            time.sleep(1)
 
     print("✨ 텔레그램 메시지 전송 완료!")
 
