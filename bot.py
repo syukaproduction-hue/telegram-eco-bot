@@ -89,32 +89,31 @@ def get_economic_news():
 
     payload = {
         "model": "claude-sonnet-4-6",
-        "max_tokens": 1500,
+        "max_tokens": 1200,
         "messages": [
             {
                 "role": "user",
-                "content": f"""오늘 {today_str}입니다. {period} 경제 뉴스를 정리해주세요.
+                "content": f"""오늘 {today_str}입니다. {period} 경제 뉴스 Top 10을 정리해주세요.
 
-아래 규칙을 반드시 따르세요.
-- 전체 응답이 3000자를 넘지 않도록 하세요.
-- 출처(출처:)를 포함하지 마세요.
-- 별표(*), 언더스코어(_), 백틱(`), 대괄호([]), 샵(#) 등 마크다운 특수문자를 절대 사용하지 마세요.
-- 이모지는 사용해도 됩니다.
-- 일반 텍스트로만 작성하세요.
+반드시 지킬 규칙:
+- 전체 응답은 2000자 이내
+- 별표(*), 언더스코어(_), 백틱(`), 샵(#) 등 마크다운 특수문자 사용 금지
+- 이모지 사용 가능
+- 일반 텍스트로만 작성
 
-출력 형식 (이 형식을 그대로 따르세요):
+출력 형식 (반드시 이 형식 그대로):
 📅 {today_str} 경제 뉴스 Top 10
 
-1. 뉴스 제목
-   요약: 2~3줄 핵심 내용
+1️⃣ 뉴스 제목 🌍
+→ 핵심 내용을 1~2문장으로 요약. 마침표로 구분.
 
-2. 뉴스 제목
-   요약: 2~3줄 핵심 내용
+2️⃣ 뉴스 제목 🇰🇷
+→ 핵심 내용을 1~2문장으로 요약. 마침표로 구분.
 
-(총 10개, 중요도 순)
+(글로벌 뉴스는 🌍, 한국 뉴스는 🇰🇷 사용. 총 10개, 중요도 순)
 
-💡 한줄 총평
-전체 경제 흐름 2~3줄 요약
+💡 한 줄 총평
+전체 경제 흐름을 1~2문장으로 요약.
 
 ---경제뉴스 원문---
 {news_text}
@@ -133,11 +132,6 @@ def get_economic_news():
     for block in data.get("content", []):
         if block.get("type") == "text":
             result += block.get("text", "")
-
-    # 출처 줄 제거 (Claude가 지시를 어길 경우 대비)
-    lines = result.split("\n")
-    cleaned = [l for l in lines if not l.strip().startswith("출처:")]
-    result = "\n".join(cleaned)
 
     # 연속 빈 줄 정리
     while "\n\n\n" in result:
