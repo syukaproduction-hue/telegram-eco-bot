@@ -1,30 +1,25 @@
-name: 매일 아침 경제 뉴스 봇
+name: 일일 뉴스 전송 봇 실행
 
 on:
-  schedule:
-    - cron: '0 9 * * 1-5'  # 월~금 UTC 09:00 = 한국시간 18:00 (임시 테스트)
-  workflow_dispatch:         # 수동 실행 버튼 (테스트용)
-  push:
-    branches:
-      - main                 # 코드 push 시에도 실행 (저장소 활성화 유지)
+  workflow_dispatch:       # 수동 실행 가능 (cron-job.org가 트리거)
 
 jobs:
   send-news:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 코드 체크아웃
+      - name: 저장소 코드 확인
         uses: actions/checkout@v4
 
-      - name: Python 설치
+      - name: Python 설정
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: 패키지 설치
+      - name: 필수 패키지 설치
         run: pip install requests
 
-      - name: 봇 실행
+      - name: 뉴스 전송
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
