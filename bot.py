@@ -80,20 +80,18 @@ def enforce_length(text, max_len=3600):
 
 def get_economic_news():
     today = datetime.now()
-    weekday = today.weekday()
     today_str = today.strftime("%Y년 %m월 %d일")
 
-    if weekday == 0:
-        from_date = (today - timedelta(days=2)).strftime("%Y-%m-%d")
-        to_date = (today - timedelta(days=1)).strftime("%Y-%m-%d")
-        saturday = (today - timedelta(days=2)).strftime("%m월 %d일")
-        sunday = (today - timedelta(days=1)).strftime("%m월 %d일")
-        period = f"{saturday}~{sunday} 주말"
-    else:
-        from_date = (today - timedelta(days=1)).strftime("%Y-%m-%d")
-        to_date = today.strftime("%Y-%m-%d")
-        yesterday = (today - timedelta(days=1)).strftime("%m월 %d일")
-        period = yesterday
+    # 오전 9시 기준 12시간 전(전날 21시) ~ 오전 9시 윈도우
+    reference = today.replace(hour=9, minute=0, second=0, microsecond=0)
+    from_dt = reference - timedelta(hours=12)
+
+    from_date = from_dt.strftime("%Y-%m-%dT%H:%M:%S")
+    to_date = reference.strftime("%Y-%m-%dT%H:%M:%S")
+
+    from_str = from_dt.strftime("%m월 %d일 %H시")
+    to_str = reference.strftime("%m월 %d일 %H시")
+    period = f"{from_str} ~ {to_str}"
 
     articles = fetch_news(from_date, to_date)
 
