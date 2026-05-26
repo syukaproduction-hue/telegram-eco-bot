@@ -20,7 +20,7 @@ def fetch_news(from_date, to_date):
         "language": "en",
         "from": from_date,
         "to": to_date,
-        "sortBy": "popularity",
+        "sortBy": "publishedAt",
         "pageSize": 20,
         "apiKey": NEWS_API_KEY,
     }
@@ -39,7 +39,7 @@ def fetch_news(from_date, to_date):
         "language": "ko",
         "from": from_date,
         "to": to_date,
-        "sortBy": "popularity",
+        "sortBy": "publishedAt",
         "pageSize": 20,
         "apiKey": NEWS_API_KEY,
     }
@@ -81,17 +81,14 @@ def enforce_length(text, max_len=3600):
 def get_economic_news():
     # GitHub Actions는 UTC로 실행됨 → utcnow() 사용
     now_utc = datetime.utcnow()
-    from_dt_utc = now_utc - timedelta(hours=12)
-
-    # NewsAPI에 넘기는 시간은 UTC 기준
-    from_date = from_dt_utc.strftime("%Y-%m-%dT%H:%M:%S")
-    to_date = now_utc.strftime("%Y-%m-%dT%H:%M:%S")
-
-    # 텔레그램 표시용: KST(UTC+9) 변환
     now_kst = now_utc + timedelta(hours=9)
-    from_kst = from_dt_utc + timedelta(hours=9)
     today_str = now_kst.strftime("%Y년 %m월 %d일")
-    period = f"{from_kst.strftime('%m월 %d일 %H시')} ~ {now_kst.strftime('%m월 %d일 %H시')}"
+
+    # NewsAPI 무료 플랜은 24h 인덱싱 지연 → 시간 단위 필터 불가
+    # 전날 날짜 기준으로 조회 + publishedAt 정렬로 최신 기사 우선 수집
+    from_date = (now_utc - timedelta(days=1)).strftime("%Y-%m-%d")
+    to_date = now_utc.strftime("%Y-%m-%d")
+    period = f"{(now_kst - timedelta(days=1)).strftime('%m월 %d일')} ~ {now_kst.strftime('%m월 %d일 %H시')}"
 
     articles = fetch_news(from_date, to_date)
 
