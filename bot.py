@@ -1,6 +1,8 @@
 import os
+import re
 import time
 import requests
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -9,6 +11,43 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
 
 TELEGRAM_MAX_LEN = 4000
+
+# 경제 섹션 RSS 피드 (연합뉴스·한국경제·매일경제·서울경제·조선비즈)
+KOREA_RSS_FEEDS = [
+    "https://www.yna.co.kr/rss/economy.xml",
+    "https://www.hankyung.com/feed/economy",
+    "https://www.mk.co.kr/rss/40300001/",
+    "https://www.sedaily.com/RSSFeed/Economy",
+    "https://biz.chosun.com/rss/economy.xml",
+]
+
+
+def fetch_korea_rss():
+    articles = []
+    seen_titles = set()
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    for feed_url in KOREA_RSS_FEEDS:
+        try:
+            res = requests.get(feed_url, headers=headers, timeout=10)
+            if res.status_code != 200:
+                continue
+            root = ET.fromstring(res.content)
+            for item in root.findall(".//item")[:10]:
+                title = item.findtext("title", "").strip()
+                desc = item.findtext("description", "").strip()
+                desc = re.sub(r"<[^>]+>", "", desc).strip()
+                if title and title not in seen_titles:
+                    seen_titles.add(title)
+                    articles.append({
+                        "title": title,
+                        "description": desc,
+                        "type": "한국"
+                    })
+        except Exception:
+            continue
+
+    return articles
 
 
 def fetch_news(from_date, to_date):
@@ -33,24 +72,7 @@ def fetch_news(from_date, to_date):
                 "type": "글로벌"
             })
 
-    korea_articles = []
-    korea_params = {
-        "q": "금리 OR 주식 OR 경제 OR 무역 OR 환율 OR 인플레이션",
-        "domains": "hankyung.com,mk.co.kr,yna.co.kr,sedaily.com,biz.chosun.com",
-        "from": from_date,
-        "to": to_date,
-        "sortBy": "popularity",
-        "pageSize": 20,
-        "apiKey": NEWS_API_KEY,
-    }
-    korea_res = requests.get(base_url, params=korea_params)
-    if korea_res.status_code == 200:
-        for a in korea_res.json().get("articles", []):
-            korea_articles.append({
-                "title": a.get("title", ""),
-                "description": a.get("description", ""),
-                "type": "한국"
-            })
+    korea_articles = fetch_korea_rss()
 
     # 글로벌 6개 + 한국 4개 목표, 한국 부족분은 글로벌로 채워 항상 10개 유지
     korea_count = min(len(korea_articles), 4)
@@ -86,7 +108,6 @@ def get_economic_news():
     today_str = now_kst.strftime("%Y년 %m월 %d일")
     from_date = (now_utc - timedelta(days=1)).strftime("%Y-%m-%d")
     to_date = now_utc.strftime("%Y-%m-%d")
-    period = f"{(now_kst - timedelta(days=1)).strftime('%m월 %d일')} ~ {now_kst.strftime('%m월 %d일 %H시')}"
 
     articles = fetch_news(from_date, to_date)
 
