@@ -79,19 +79,19 @@ def enforce_length(text, max_len=3600):
 
 
 def get_economic_news():
-    today = datetime.now()
-    today_str = today.strftime("%Y년 %m월 %d일")
+    # GitHub Actions는 UTC로 실행됨 → utcnow() 사용
+    now_utc = datetime.utcnow()
+    from_dt_utc = now_utc - timedelta(hours=12)
 
-    # 오전 9시 기준 12시간 전(전날 21시) ~ 오전 9시 윈도우
-    reference = today.replace(hour=9, minute=0, second=0, microsecond=0)
-    from_dt = reference - timedelta(hours=12)
+    # NewsAPI에 넘기는 시간은 UTC 기준
+    from_date = from_dt_utc.strftime("%Y-%m-%dT%H:%M:%S")
+    to_date = now_utc.strftime("%Y-%m-%dT%H:%M:%S")
 
-    from_date = from_dt.strftime("%Y-%m-%dT%H:%M:%S")
-    to_date = reference.strftime("%Y-%m-%dT%H:%M:%S")
-
-    from_str = from_dt.strftime("%m월 %d일 %H시")
-    to_str = reference.strftime("%m월 %d일 %H시")
-    period = f"{from_str} ~ {to_str}"
+    # 텔레그램 표시용: KST(UTC+9) 변환
+    now_kst = now_utc + timedelta(hours=9)
+    from_kst = from_dt_utc + timedelta(hours=9)
+    today_str = now_kst.strftime("%Y년 %m월 %d일")
+    period = f"{from_kst.strftime('%m월 %d일 %H시')} ~ {now_kst.strftime('%m월 %d일 %H시')}"
 
     articles = fetch_news(from_date, to_date)
 
