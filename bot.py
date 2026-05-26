@@ -35,8 +35,8 @@ def fetch_news(from_date, to_date):
 
     korea_articles = []
     korea_params = {
-        "q": "금리 OR 주식 OR 경제 OR 무역 OR 인플레이션",
-        "language": "ko",
+        "q": "금리 OR 주식 OR 경제 OR 무역 OR 환율 OR 인플레이션",
+        "domains": "hankyung.com,mk.co.kr,yna.co.kr,sedaily.com,biz.chosun.com",
         "from": from_date,
         "to": to_date,
         "sortBy": "popularity",
@@ -52,8 +52,10 @@ def fetch_news(from_date, to_date):
                 "type": "한국"
             })
 
-    # 글로벌 상위 6개 + 한국 상위 4개 = 총 10개 고정 선별
-    selected = global_articles[:6] + korea_articles[:4]
+    # 글로벌 6개 + 한국 4개 목표, 한국 부족분은 글로벌로 채워 항상 10개 유지
+    korea_count = min(len(korea_articles), 4)
+    global_count = min(len(global_articles), 10 - korea_count)
+    selected = global_articles[:global_count] + korea_articles[:korea_count]
     return selected
 
 
@@ -107,16 +109,16 @@ def get_economic_news():
         "messages": [
             {
                 "role": "user",
-                "content": f"""오늘 {today_str}입니다. 아래 경제 뉴스 10개를 순서대로 정리해주세요.
+                "content": f"""오늘 {today_str}입니다. 아래 경제 뉴스 {len(articles)}개를 순서대로 정리해주세요.
 
 반드시 지킬 규칙:
-- 아래 원문 10개를 순서 그대로 1~10번으로 정리할 것 (선택하거나 빠뜨리지 말 것)
+- 아래 원문 {len(articles)}개를 순서 그대로 번호 순으로 정리할 것 (선택하거나 빠뜨리지 말 것)
 - 별표(*), 언더스코어(_), 백틱(`), 샵(#) 등 마크다운 특수문자 사용 금지
 - 이모지 사용 가능
 - 일반 텍스트로만 작성
 
 출력 형식 (이 형식을 그대로 따를 것):
-📅 {today_str} 경제 뉴스 Top 10
+📅 {today_str} 경제 뉴스 Top {len(articles)}
 
 1️⃣ 뉴스 제목 🌍
 → 2~3문장, 마침표로 구분, 합산 60~90자. 예: 핵심 사실. 배경 또는 영향. 전망.
