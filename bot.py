@@ -12,8 +12,7 @@ TELEGRAM_MAX_LEN = 4000
 
 
 def fetch_news(from_date, to_date):
-    global_articles = []
-    korean_articles = []
+    all_articles = []
 
     base_url = "https://newsapi.org/v2/everything"
 
@@ -22,14 +21,14 @@ def fetch_news(from_date, to_date):
         "language": "en",
         "from": from_date,
         "to": to_date,
-        "sortBy": "publishedAt",
+        "sortBy": "popularity",
         "pageSize": 20,
         "apiKey": NEWS_API_KEY,
     }
     global_res = requests.get(base_url, params=global_params)
     if global_res.status_code == 200:
         for a in global_res.json().get("articles", []):
-            global_articles.append({
+            all_articles.append({
                 "title": a.get("title", ""),
                 "description": a.get("description", ""),
                 "type": "글로벌"
@@ -40,20 +39,20 @@ def fetch_news(from_date, to_date):
         "language": "ko",
         "from": from_date,
         "to": to_date,
-        "sortBy": "publishedAt",
+        "sortBy": "popularity",
         "pageSize": 20,
         "apiKey": NEWS_API_KEY,
     }
     korea_res = requests.get(base_url, params=korea_params)
     if korea_res.status_code == 200:
         for a in korea_res.json().get("articles", []):
-            korean_articles.append({
+            all_articles.append({
                 "title": a.get("title", ""),
                 "description": a.get("description", ""),
                 "type": "한국"
             })
 
-    return global_articles, korean_articles
+    return all_articles
 
 
 def enforce_length(text, max_len=3600):
@@ -84,20 +83,16 @@ def get_economic_news():
     now_kst = now_utc + timedelta(hours=9)
     today_str = now_kst.strftime("%Y년 %m월 %d일")
 
-    # NewsAPI 무료 플랜은 24h 인덱싱 지연 → 시간 단위 필터 불가
-    # 전날 날짜 기준으로 조회 + publishedAt 정렬로 최신 기사 우선 수집
+    # NewsAPI 무료 플랜 24h 인덱싱 지연 대응 → 전날 날짜 기준 조회
     from_date = (now_utc - timedelta(days=1)).strftime("%Y-%m-%d")
     to_date = now_utc.strftime("%Y-%m-%d")
     period = f"{(now_kst - timedelta(days=1)).strftime('%m월 %d일')} ~ {now_kst.strftime('%m월 %d일 %H시')}"
 
-    global_articles, korean_articles = fetch_news(from_date, to_date)
+    articles = fetch_news(from_date, to_date)
 
-    # 글로벌 10개 + 한국 10개 균등 분배 → Claude가 각 5개씩 선별
     news_text = ""
-    for a in global_articles[:10]:
-        news_text += f"[글로벌] {a['title']}\n{a['description']}\n\n"
-    for a in korean_articles[:10]:
-        news_text += f"[한국] {a['title']}\n{a['description']}\n\n"
+    for a in articles[:40]:
+        news_text += f"[{a['type']}] {a['title']}\n{a['description']}\n\n"
 
     if not news_text:
         news_text = "경제 뉴스를 찾을 수 없습니다."
@@ -120,7 +115,6 @@ def get_economic_news():
 - 별표(*), 언더스코어(_), 백틱(`), 샵(#) 등 마크다운 특수문자 사용 금지
 - 이모지 사용 가능
 - 일반 텍스트로만 작성
-- 반드시 글로벌 뉴스 5개, 한국 뉴스 5개로 균등하게 선별할 것
 
 출력 형식 (이 형식을 그대로 따를 것):
 📅 {today_str} 경제 뉴스 Top 10
@@ -131,7 +125,7 @@ def get_economic_news():
 2️⃣ 뉴스 제목 🇰🇷
 → 2~3문장, 마침표로 구분, 합산 60~90자. 예: 핵심 사실. 배경 또는 영향. 전망.
 
-(글로벌 5개 + 한국 5개, 총 10개. 글로벌 뉴스는 🌍, 한국 뉴스는 🇰🇷)
+(총 10개, 중요도 순. 글로벌 뉴스는 🌍, 한국 뉴스는 🇰🇷 골고루 포함)
 
 💡 한 줄 총평
 전체 경제 흐름 2문장, 합산 60~80자.
